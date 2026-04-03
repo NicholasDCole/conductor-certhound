@@ -12,7 +12,6 @@
       "name": "check_ssl_certs",
       "taskReferenceName": "check_ssl_certs_ref",
       "type": "SIMPLE",
-      "optional": true,
       "inputParameters": {
         "urls": "${workflow.input.urls}",
         "expiration_window_days": "${workflow.input.expiration_window_days}",

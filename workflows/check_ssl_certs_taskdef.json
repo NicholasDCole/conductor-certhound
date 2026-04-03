@@ -4,6 +4,6 @@
   "retryDelaySeconds": 5,
   "retryLogic": "FIXED",
   "timeoutSeconds": 30,
-  "timeoutPolicy": "TIME_OUT_WF",
+  "timeoutPolicy": "RETRY",
   "responseTimeoutSeconds": 30
 }

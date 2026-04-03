@@ -1,6 +1,6 @@
 {
   "name": "cert_hound_monitor",
-  "description": "Multi-client SSL certificate monitoring with tiered alerting and compliance reporting",
+  "description": "Multi-client SSL certificate monitoring with parallel fan-out and tiered alerting",
   "version": 1,
   "inputParameters": [
     "clients",
@@ -22,6 +22,7 @@
       "name": "fan_out_clients",
       "taskReferenceName": "fan_out_clients_ref",
       "type": "FORK_JOIN_DYNAMIC",
+      "optional": true,
       "inputParameters": {
         "forkTaskWorkflow": "cert_hound",
         "forkTaskWorkflowVersion": "1",
@@ -34,12 +35,14 @@
       "type": "JOIN"
     },
     {
-      "name": "generate_cert_report",
-      "taskReferenceName": "generate_cert_report_ref",
-      "type": "SIMPLE",
+      "name": "compute_severity",
+      "taskReferenceName": "compute_severity_ref",
+      "type": "INLINE",
       "inputParameters": {
         "join_result": "${join_clients_ref.output}",
-        "expiration_window_days": "${workflow.input.expiration_window_days}"
+        "expiration_window_days": "${workflow.input.expiration_window_days}",
+        "evaluatorType": "javascript",
+        "expression": "(function() { var j = $.join_result || {}; var ew = $.expiration_window_days || 30; var sev = 'healthy'; for (var key in j) { var c = j[key]; if (!c || !c.details) continue; for (var i = 0; i < c.details.length; i++) { var r = c.details[i]; if (r.error || r.days_remaining <= 7) { sev = 'critical'; break; } if (r.days_remaining <= ew && sev !== 'critical') sev = 'warning'; } if (sev === 'critical') break; } return {worst_severity: sev}; })()"
       }
     },
     {
@@ -47,58 +50,68 @@
       "taskReferenceName": "tiered_alert_ref",
       "type": "SWITCH",
       "inputParameters": {
-        "severity": "${generate_cert_report_ref.output.worst_severity}"
+        "severity": "${compute_severity_ref.output.result.worst_severity}"
       },
       "evaluatorType": "value-param",
       "expression": "severity",
       "decisionCases": {
         "critical": [
           {
-            "name": "alert_critical",
-            "taskReferenceName": "alert_critical_ref",
+            "name": "notify_pagerduty",
+            "taskReferenceName": "notify_pagerduty_ref",
             "type": "INLINE",
             "inputParameters": {
-              "total_expiring": "${generate_cert_report_ref.output.total_expiring}",
               "evaluatorType": "javascript",
-              "expression": "(function() { return {channel: '#security-critical', service: 'pagerduty', priority: 'P1', message: 'CRITICAL: ' + $.total_expiring + ' certificates need attention'}; })()"
+              "expression": "(function() { return {service: 'pagerduty', priority: 'P1', message: 'CRITICAL: One or more certificates need immediate attention'}; })()"
+            }
+          },
+          {
+            "name": "notify_email",
+            "taskReferenceName": "notify_email_critical_ref",
+            "type": "INLINE",
+            "inputParameters": {
+              "evaluatorType": "javascript",
+              "expression": "(function() { return {service: 'email', to: 'security-team@company.com', subject: 'CRITICAL: Certificate alert', message: 'One or more certificates are expired or expiring within 7 days'}; })()"
             }
           }
         ],
         "warning": [
           {
-            "name": "alert_warning",
-            "taskReferenceName": "alert_warning_ref",
+            "name": "notify_slack",
+            "taskReferenceName": "notify_slack_warning_ref",
             "type": "INLINE",
             "inputParameters": {
-              "total_expiring": "${generate_cert_report_ref.output.total_expiring}",
               "evaluatorType": "javascript",
-              "expression": "(function() { return {channel: '#security-warnings', service: 'slack', message: 'WARNING: ' + $.total_expiring + ' certificates expiring within 30 days'}; })()"
+              "expression": "(function() { return {service: 'slack', channel: '#security-warnings', message: 'WARNING: One or more certificates expiring soon'}; })()"
+            }
+          },
+          {
+            "name": "notify_email",
+            "taskReferenceName": "notify_email_warning_ref",
+            "type": "INLINE",
+            "inputParameters": {
+              "evaluatorType": "javascript",
+              "expression": "(function() { return {service: 'email', to: 'security-team@company.com', subject: 'WARNING: Certificate alert', message: 'One or more certificates are expiring within the monitoring window'}; })()"
             }
           }
         ]
       },
       "defaultCase": [
         {
-          "name": "alert_info",
-          "taskReferenceName": "alert_info_ref",
+          "name": "notify_slack",
+          "taskReferenceName": "notify_slack_healthy_ref",
           "type": "INLINE",
           "inputParameters": {
-            "total_checked": "${generate_cert_report_ref.output.total_checked}",
             "evaluatorType": "javascript",
-            "expression": "(function() { return {channel: '#security-info', service: 'slack', message: 'All ' + $.total_checked + ' certificates are healthy'}; })()"
+            "expression": "(function() { return {service: 'slack', channel: '#security-info', message: 'All certificates are healthy'}; })()"
           }
         }
       ]
     }
   ],
   "outputParameters": {
-    "all_details": "${generate_cert_report_ref.output.all_details}",
-    "csv_report": "${generate_cert_report_ref.output.csv_report}",
-    "total_checked": "${generate_cert_report_ref.output.total_checked}",
-    "total_expiring": "${generate_cert_report_ref.output.total_expiring}",
-    "worst_severity": "${generate_cert_report_ref.output.worst_severity}",
-    "failed_clients": "${generate_cert_report_ref.output.failed_clients}",
-    "alert": "${tiered_alert_ref.output.result}"
+    "results": "${join_clients_ref.output}",
+    "worst_severity": "${compute_severity_ref.output.result.worst_severity}"
   },
   "schemaVersion": 2,
   "restartable": true,

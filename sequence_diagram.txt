@@ -1,0 +1,48 @@
+sequenceDiagram
+    actor User
+    participant Conductor as Conductor Server
+    participant Prepare as Prepare Fork Inputs<br/>(INLINE)
+    participant Fork as FORK_JOIN_DYNAMIC
+    participant CertHound as cert_hound<br/>(Sub-Workflow)
+    participant SSLWorker as check_ssl_certs<br/>(Python Worker)
+    participant Join as JOIN
+    participant Severity as Compute Severity<br/>(INLINE)
+    participant Switch as SWITCH<br/>(Tiered Alert)
+
+    User->>Conductor: POST /workflow/cert_hound_monitor<br/>{clients, expiration_window_days}
+    activate Conductor
+
+    Conductor->>Prepare: Evaluate JS expression
+    Prepare-->>Conductor: fork_inputs[] (one per client)
+
+    Conductor->>Fork: Fan out sub-workflows (optional: true)
+    activate Fork
+
+    loop Each client (parallel)
+        Fork->>CertHound: Start cert_hound(urls)
+        activate CertHound
+        CertHound->>SSLWorker: Poll & execute check_ssl_certs
+        SSLWorker-->>CertHound: {expiring_urls, details, totals}
+        deactivate CertHound
+    end
+
+    Fork->>Join: All sub-workflows complete
+    deactivate Fork
+
+    Join-->>Conductor: Merged results (keyed by client)
+
+    Conductor->>Severity: Scan results for errors/expiry
+    Severity-->>Conductor: worst_severity
+
+    Conductor->>Switch: Route on severity
+
+    alt critical
+        Switch-->>Conductor: PagerDuty P1 + Email
+    else warning
+        Switch-->>Conductor: Slack + Email
+    else healthy
+        Switch-->>Conductor: Slack
+    end
+
+    Conductor-->>User: Workflow COMPLETED<br/>{results, worst_severity}
+    deactivate Conductor
