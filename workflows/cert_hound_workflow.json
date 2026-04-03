@@ -1,0 +1,35 @@
+{
+  "name": "cert_hound",
+  "description": "Checks SSL certificates for a list of URLs and identifies those expiring within a given window",
+  "version": 1,
+  "inputParameters": [
+    "urls",
+    "expiration_window_days",
+    "client_name"
+  ],
+  "tasks": [
+    {
+      "name": "check_ssl_certs",
+      "taskReferenceName": "check_ssl_certs_ref",
+      "type": "SIMPLE",
+      "optional": true,
+      "inputParameters": {
+        "urls": "${workflow.input.urls}",
+        "expiration_window_days": "${workflow.input.expiration_window_days}",
+        "client_name": "${workflow.input.client_name}"
+      }
+    }
+  ],
+  "outputParameters": {
+    "expiring_urls": "${check_ssl_certs_ref.output.expiring_urls}",
+    "details": "${check_ssl_certs_ref.output.details}",
+    "total_checked": "${check_ssl_certs_ref.output.total_checked}",
+    "total_expiring": "${check_ssl_certs_ref.output.total_expiring}",
+    "client_name": "${workflow.input.client_name}"
+  },
+  "schemaVersion": 2,
+  "restartable": true,
+  "workflowStatusListenerEnabled": false,
+  "timeoutPolicy": "ALERT_ONLY",
+  "timeoutSeconds": 0
+}

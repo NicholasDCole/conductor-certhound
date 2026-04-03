@@ -1,0 +1,17 @@
+{
+  "clients": [
+    {
+      "client_name": "Acme Corp",
+      "urls": ["https://expired.badssl.com", "https://google.com"]
+    },
+    {
+      "client_name": "Globex",
+      "urls": ["https://github.com"]
+    },
+    {
+      "client_name": "Initech",
+      "urls": []
+    }
+  ],
+  "expiration_window_days": 30
+}
