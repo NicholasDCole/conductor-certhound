@@ -7,6 +7,7 @@ sequenceDiagram
     participant SSLWorker as check_ssl_certs<br/>(Python Worker)
     participant Join as JOIN
     participant Severity as Compute Severity<br/>(INLINE)
+    participant Jira as Create Jira Tickets<br/>(INLINE)
     participant Switch as SWITCH<br/>(Tiered Alert)
 
     User->>Conductor: POST /workflow/cert_hound_monitor<br/>{clients, expiration_window_days}
@@ -39,8 +40,13 @@ sequenceDiagram
 
     Conductor->>Severity: Scan results for errors/expiry
     activate Severity
-    Severity-->>Conductor: worst_severity
+    Severity-->>Conductor: worst_severity, failed_clients,<br/>expiring_certs
     deactivate Severity
+
+    Conductor->>Jira: Create tickets for failed clients
+    activate Jira
+    Jira-->>Conductor: {title: client_name,<br/>description: failure reason}
+    deactivate Jira
 
     Conductor->>Switch: Route on severity
     activate Switch

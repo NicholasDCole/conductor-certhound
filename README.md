@@ -138,11 +138,77 @@ curl -s http://localhost:8080/api/workflow/<WORKFLOW_ID> | python -m json.tool
 ### Sample Output
 
 ```
-status: COMPLETED
-worst_severity: critical
+{
+  "expiring_certs": [
+    {
+      "days_remaining": -4009,
+      "error": "certificate verification failed (expired or invalid)",
+      "client_name": "Acme Corp",
+      "url": "https://expired.badssl.com"
+    }
+  ],
+  "failed_clients": [
+    {
+      "reason": "Sub-workflow failed or returned no details",
+      "client_name": "Initech"
+    }
+  ],
+  "worst_severity": "critical",
+  "results": {
+    "_fan_out_clients_ref_0": {
+      "subWorkflowId": "4f2ec00c-d183-41ce-a678-d03d2066f143",
+      "total_expiring": 1,
+      "details": [
+        {
+          "hostname": "expired.badssl.com",
+          "expiry_date": "2015-04-12T23:59:59+00:00",
+          "days_remaining": -4009,
+          "error": "certificate verification failed (expired or invalid)",
+          "url": "https://expired.badssl.com"
+        },
+        {
+          "hostname": "google.com",
+          "expiry_date": "2026-06-08T08:36:31+00:00",
+          "days_remaining": 65,
+          "error": null,
+          "url": "https://google.com"
+        }
+      ],
+      "total_checked": 2,
+      "expiring_urls": [
+        "https://expired.badssl.com"
+      ],
+      "client_name": "Acme Corp"
+    },
+    "_fan_out_clients_ref_1": {
+      "subWorkflowId": "8a230338-adf9-49d2-9a80-31b812d93a55",
+      "total_expiring": 0,
+      "details": [
+        {
+          "hostname": "github.com",
+          "expiry_date": "2026-06-03T23:59:59+00:00",
+          "days_remaining": 61,
+          "error": null,
+          "url": "https://github.com"
+        }
+      ],
+      "total_checked": 1,
+      "expiring_urls": [],
+      "client_name": "Globex"
+    },
+    "_fan_out_clients_ref_2": {
+      "subWorkflowId": "5e40708c-f96c-4594-a778-7daba08772a8",
+      "total_expiring": null,
+      "details": null,
+      "total_checked": null,
+      "expiring_urls": null,
+      "client_name": "Initech"
+    }
+  }
+}
 ```
 
-The workflow output contains a `results` object keyed by client with per-URL certificate details, and a `worst_severity` field that drives the tiered alerting.
+The workflow output also contains a `results` object keyed by client with per-URL certificate details (expiry date, days remaining, errors).
 
 ## Stopping
 

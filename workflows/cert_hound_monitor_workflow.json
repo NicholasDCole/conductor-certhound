@@ -42,7 +42,17 @@
         "join_result": "${join_clients_ref.output}",
         "expiration_window_days": "${workflow.input.expiration_window_days}",
         "evaluatorType": "javascript",
-        "expression": "(function() { var j = $.join_result || {}; var ew = $.expiration_window_days || 30; var sev = 'healthy'; for (var key in j) { var c = j[key]; if (!c || !c.details) continue; for (var i = 0; i < c.details.length; i++) { var r = c.details[i]; if (r.error || r.days_remaining <= 7) { sev = 'critical'; break; } if (r.days_remaining <= ew && sev !== 'critical') sev = 'warning'; } if (sev === 'critical') break; } return {worst_severity: sev}; })()"
+        "expression": "(function() { var j = $.join_result || {}; var ew = $.expiration_window_days || 30; var sev = 'healthy'; var failed = []; var expiring = []; for (var key in j) { var c = j[key]; if (!c) continue; var name = c.client_name || key; if (!c.details) { failed.push({client_name: name, reason: 'Sub-workflow failed or returned no details'}); continue; } for (var i = 0; i < c.details.length; i++) { var r = c.details[i]; if (r.error || r.days_remaining <= 7) { sev = 'critical'; expiring.push({client_name: name, url: r.url, days_remaining: r.days_remaining, error: r.error || ''}); } else if (r.days_remaining <= ew) { if (sev !== 'critical') sev = 'warning'; expiring.push({client_name: name, url: r.url, days_remaining: r.days_remaining, error: ''}); } } } return {worst_severity: sev, failed_clients: failed, expiring_certs: expiring}; })()"
+      }
+    },
+    {
+      "name": "create_jira_tickets",
+      "taskReferenceName": "create_jira_tickets_ref",
+      "type": "INLINE",
+      "inputParameters": {
+        "failed_clients": "${compute_severity_ref.output.result.failed_clients}",
+        "evaluatorType": "javascript",
+        "expression": "(function() { var fc = $.failed_clients || []; var tickets = []; for (var i = 0; i < fc.length; i++) { tickets.push({title: fc[i].client_name, description: 'Failure in API: ' + fc[i].reason}); } return {tickets: tickets}; })()"
       }
     },
     {
@@ -61,8 +71,9 @@
             "taskReferenceName": "notify_pagerduty_ref",
             "type": "INLINE",
             "inputParameters": {
+              "expiring_certs": "${compute_severity_ref.output.result.expiring_certs}",
               "evaluatorType": "javascript",
-              "expression": "(function() { return {service: 'pagerduty', priority: 'P1', message: 'CRITICAL: One or more certificates need immediate attention'}; })()"
+              "expression": "(function() { var certs = $.expiring_certs || []; var lines = []; for (var i = 0; i < certs.length; i++) { var c = certs[i]; lines.push(c.client_name + ' - ' + c.url + ' (' + (c.error || c.days_remaining + ' days remaining') + ')'); } return {service: 'pagerduty', priority: 'P1', message: 'CRITICAL: Certificates need immediate attention', details: lines}; })()"
             }
           },
           {
@@ -70,8 +81,9 @@
             "taskReferenceName": "notify_email_critical_ref",
             "type": "INLINE",
             "inputParameters": {
+              "expiring_certs": "${compute_severity_ref.output.result.expiring_certs}",
               "evaluatorType": "javascript",
-              "expression": "(function() { return {service: 'email', to: 'security-team@company.com', subject: 'CRITICAL: Certificate alert', message: 'One or more certificates are expired or expiring within 7 days'}; })()"
+              "expression": "(function() { var certs = $.expiring_certs || []; var lines = []; for (var i = 0; i < certs.length; i++) { var c = certs[i]; lines.push(c.client_name + ' - ' + c.url + ' (' + (c.error || c.days_remaining + ' days remaining') + ')'); } return {service: 'email', to: 'security-team@company.com', subject: 'CRITICAL: Certificate alert', message: 'The following certificates are expired or expiring within 7 days', details: lines}; })()"
             }
           }
         ],
@@ -81,8 +93,9 @@
             "taskReferenceName": "notify_slack_warning_ref",
             "type": "INLINE",
             "inputParameters": {
+              "expiring_certs": "${compute_severity_ref.output.result.expiring_certs}",
               "evaluatorType": "javascript",
-              "expression": "(function() { return {service: 'slack', channel: '#security-warnings', message: 'WARNING: One or more certificates expiring soon'}; })()"
+              "expression": "(function() { var certs = $.expiring_certs || []; var lines = []; for (var i = 0; i < certs.length; i++) { var c = certs[i]; lines.push(c.client_name + ' - ' + c.url + ' (' + c.days_remaining + ' days remaining)'); } return {service: 'slack', channel: '#security-warnings', message: 'WARNING: Certificates expiring soon', details: lines}; })()"
             }
           },
           {
@@ -90,8 +103,9 @@
             "taskReferenceName": "notify_email_warning_ref",
             "type": "INLINE",
             "inputParameters": {
+              "expiring_certs": "${compute_severity_ref.output.result.expiring_certs}",
               "evaluatorType": "javascript",
-              "expression": "(function() { return {service: 'email', to: 'security-team@company.com', subject: 'WARNING: Certificate alert', message: 'One or more certificates are expiring within the monitoring window'}; })()"
+              "expression": "(function() { var certs = $.expiring_certs || []; var lines = []; for (var i = 0; i < certs.length; i++) { var c = certs[i]; lines.push(c.client_name + ' - ' + c.url + ' (' + c.days_remaining + ' days remaining)'); } return {service: 'email', to: 'security-team@company.com', subject: 'WARNING: Certificate alert', message: 'The following certificates are expiring within the monitoring window', details: lines}; })()"
             }
           }
         ]
@@ -111,7 +125,9 @@
   ],
   "outputParameters": {
     "results": "${join_clients_ref.output}",
-    "worst_severity": "${compute_severity_ref.output.result.worst_severity}"
+    "worst_severity": "${compute_severity_ref.output.result.worst_severity}",
+    "failed_clients": "${compute_severity_ref.output.result.failed_clients}",
+    "expiring_certs": "${compute_severity_ref.output.result.expiring_certs}"
   },
   "schemaVersion": 2,
   "restartable": true,
