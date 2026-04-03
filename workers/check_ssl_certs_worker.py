@@ -1,6 +1,9 @@
+import json
 import os
 import ssl
 import socket
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -86,8 +89,36 @@ def check_ssl_certs(urls: list[str], expiration_window_days: int = 30) -> dict:
     }
 
 
+def register_definitions(server_url: str) -> None:
+    workflows_dir = os.path.join(os.path.dirname(__file__), "..", "workflows")
+
+    def _request(method: str, endpoint: str, payload: list) -> None:
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            f"{server_url}{endpoint}",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method=method,
+        )
+        try:
+            urllib.request.urlopen(req)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode(errors="replace")
+            print(f"  Warning: {method} {endpoint} returned {e.code}: {body[:120]}")
+
+    with open(os.path.join(workflows_dir, "check_ssl_certs_taskdef.json")) as f:
+        _request("POST", "/metadata/taskdefs", [json.load(f)])
+
+    for wf_file in ("cert_hound_workflow.json", "cert_hound_monitor_workflow.json"):
+        with open(os.path.join(workflows_dir, wf_file)) as f:
+            _request("PUT", "/metadata/workflow", [json.load(f)])
+
+    print("Registered task definition and workflows.")
+
+
 def main():
     server_url = os.getenv("CONDUCTOR_SERVER_URL", "http://localhost:8080/api")
+    register_definitions(server_url)
     configuration = Configuration(server_api_url=server_url)
     task_handler = TaskHandler(configuration=configuration)
     task_handler.start_processes()

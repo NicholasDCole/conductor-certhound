@@ -1,14 +1,20 @@
 sequenceDiagram
     actor User
+
+    box rgb(220,235,255) Conductor Server
     participant Conductor as Conductor Server
     participant Prepare as Prepare Fork Inputs<br/>(INLINE)
     participant Fork as FORK_JOIN_DYNAMIC
     participant CertHound as cert_hound<br/>(Sub-Workflow)
-    participant SSLWorker as check_ssl_certs<br/>(Python Worker)
     participant Join as JOIN
     participant Severity as Compute Severity<br/>(INLINE)
     participant Jira as Create Jira Tickets<br/>(INLINE)
     participant Switch as SWITCH<br/>(Tiered Alert)
+    end
+
+    box rgb(255,240,210) Python Worker
+    participant SSLWorker as check_ssl_certs<br/>(Python Worker)
+    end
 
     User->>Conductor: POST /workflow/cert_hound_monitor<br/>{clients, expiration_window_days}
     activate Conductor

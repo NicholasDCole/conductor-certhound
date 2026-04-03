@@ -12,8 +12,7 @@ A [Conductor](https://github.com/conductor-oss/conductor)-powered workflow that 
 ## Prerequisites
 
 - Python 3.10+
-- npm (for installing the Conductor CLI)
-- [Conductor CLI](https://www.npmjs.com/package/@conductor-oss/conductor-cli):
+- [Conductor CLI](https://www.npmjs.com/package/@conductor-oss/conductor-cli) (npm, used only for server management):
   ```bash
   npm install -g @conductor-oss/conductor-cli
   ```
@@ -36,11 +35,31 @@ Or hit the API directly:
 curl http://localhost:8080/health
 ```
 
-## 2. Register Task Definitions and Workflows
+## 2. Set Up Python Environment
 
-Register the task definition first, then both workflows.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r workers/requirements.txt
+```
 
-**Using the Conductor CLI:**
+On Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+## 3. Start the Worker
+
+```bash
+python workers/check_ssl_certs_worker.py
+```
+
+The worker automatically registers the task definition and workflows on startup, then begins polling for `check_ssl_certs` tasks.
+
+### What the worker registers
+
+On startup, the worker posts `workflows/check_ssl_certs_taskdef.json` and puts both workflow definitions (`cert_hound_workflow.json`, `cert_hound_monitor_workflow.json`) to the Conductor metadata API. If you want to register or update them manually — for example after modifying a workflow definition without restarting the worker — you can use the Conductor CLI:
 
 ```bash
 conductor task create workflows/check_ssl_certs_taskdef.json
@@ -48,7 +67,7 @@ conductor workflow create workflows/cert_hound_workflow.json
 conductor workflow create workflows/cert_hound_monitor_workflow.json
 ```
 
-To update existing definitions, use `update` instead of `create`:
+To update existing definitions:
 
 ```bash
 conductor task update workflows/check_ssl_certs_taskdef.json
@@ -56,7 +75,7 @@ conductor workflow update workflows/cert_hound_workflow.json
 conductor workflow update workflows/cert_hound_monitor_workflow.json
 ```
 
-**Or using curl:**
+Or directly via curl:
 
 ```bash
 # Task definition (API expects an array)
@@ -64,7 +83,7 @@ curl -X POST http://localhost:8080/api/metadata/taskdefs \
   -H 'Content-Type: application/json' \
   -d "[$(cat workflows/check_ssl_certs_taskdef.json)]"
 
-# Workflows (API expects an array)
+# Workflows (PUT is create-or-update)
 curl -X PUT http://localhost:8080/api/metadata/workflow \
   -H 'Content-Type: application/json' \
   -d "[$(cat workflows/cert_hound_workflow.json)]"
@@ -74,23 +93,7 @@ curl -X PUT http://localhost:8080/api/metadata/workflow \
   -d "[$(cat workflows/cert_hound_monitor_workflow.json)]"
 ```
 
-## 3. Install Python Dependencies
-
-```bash
-pip install -r workers/requirements.txt
-```
-
-## 4. Start the Worker
-
-```bash
-python workers/check_ssl_certs_worker.py
-#Alternatively use python3
-python3 workers/check_ssl_certs_worker.py
-```
-
-The worker will begin polling the Conductor server for `check_ssl_certs` tasks.
-
-## 5. Execute the Workflow
+## 4. Execute the Workflow
 
 Trigger the `cert_hound_monitor` workflow with the sample input.
 
