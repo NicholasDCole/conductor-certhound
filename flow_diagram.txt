@@ -1,0 +1,24 @@
+flowchart TD
+    A([User triggers workflow<br/>clients + expiration_window_days])
+
+    subgraph worker ["Python Worker  ·  horizontally scalable"]
+        C1[check_ssl_certs<br/>client 1]
+        C2[check_ssl_certs<br/>client 2]
+        C3[. . .]
+    end
+
+    A --> C1 & C2 & C3
+    C1 & C2 & C3 --> D[Aggregate results]
+
+    D --> E{Any failed clients?}
+    E -- Yes --> F[Create Jira tickets<br/>per failed client]
+    F --> G{Severity?}
+    E -- No --> G
+
+    G -- "critical<br/>(expired or ≤ 7 days)" --> H[PagerDuty P1 + Email]
+    G -- "warning<br/>(within expiration window)" --> I[Slack + Email]
+    G -- healthy --> J[Slack]
+
+    H & I & J --> K([Workflow complete<br/>results + worst_severity])
+
+    style worker fill:#fff0d2,stroke:#e0a030
