@@ -12,7 +12,7 @@ A [Conductor](https://github.com/conductor-oss/conductor)-powered workflow that 
 ## Prerequisites
 
 - Python 3.10+
-- Node.js >= 14
+- npm (for installing the Conductor CLI)
 - [Conductor CLI](https://www.npmjs.com/package/@conductor-oss/conductor-cli):
   ```bash
   npm install -g @conductor-oss/conductor-cli
@@ -84,6 +84,8 @@ pip install -r workers/requirements.txt
 
 ```bash
 python workers/check_ssl_certs_worker.py
+#Alternatively use python3
+python3 workers/check_ssl_certs_worker.py
 ```
 
 The worker will begin polling the Conductor server for `check_ssl_certs` tasks.
