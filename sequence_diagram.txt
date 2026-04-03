@@ -13,7 +13,9 @@ sequenceDiagram
     activate Conductor
 
     Conductor->>Prepare: Evaluate JS expression
+    activate Prepare
     Prepare-->>Conductor: fork_inputs[] (one per client)
+    deactivate Prepare
 
     Conductor->>Fork: Fan out sub-workflows (optional: true)
     activate Fork
@@ -22,19 +24,26 @@ sequenceDiagram
         Fork->>CertHound: Start cert_hound(urls)
         activate CertHound
         CertHound->>SSLWorker: Poll & execute check_ssl_certs
+        activate SSLWorker
         SSLWorker-->>CertHound: {expiring_urls, details, totals}
+        deactivate SSLWorker
         deactivate CertHound
     end
 
     Fork->>Join: All sub-workflows complete
     deactivate Fork
+    activate Join
 
     Join-->>Conductor: Merged results (keyed by client)
+    deactivate Join
 
     Conductor->>Severity: Scan results for errors/expiry
+    activate Severity
     Severity-->>Conductor: worst_severity
+    deactivate Severity
 
     Conductor->>Switch: Route on severity
+    activate Switch
 
     alt critical
         Switch-->>Conductor: PagerDuty P1 + Email
@@ -43,6 +52,7 @@ sequenceDiagram
     else healthy
         Switch-->>Conductor: Slack
     end
+    deactivate Switch
 
     Conductor-->>User: Workflow COMPLETED<br/>{results, worst_severity}
     deactivate Conductor
